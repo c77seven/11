@@ -1,8 +1,7 @@
-// src/index.ts
 import { Widget } from '@forward-widget/libs';
 import axios from 'axios';
 
-const TRAKT_CLIENT_ID = "你的trakt_client_id";
+const TRAKT_CLIENT_ID = "你的trakt_client_id"; // ✅ 替换为你的 Trakt Client ID
 const TRAKT_API_BASE = "https://api.trakt.tv";
 
 interface TraktShow {
@@ -12,11 +11,11 @@ interface TraktShow {
   images?: { fanart?: { full: string } };
 }
 
-export const traktWidget = new Widget({
+const traktWidget = new Widget({
   name: "Trakt 更新时间模块",
   width: 320,
   height: 200,
-  updateInterval: 10 * 60 * 1000, // 10分钟自动刷新
+  updateInterval: 10 * 60 * 1000, // 10分钟刷新一次
   async render(container) {
     try {
       const { data } = await axios.get<TraktShow[]>(
@@ -35,12 +34,11 @@ export const traktWidget = new Widget({
         return;
       }
 
-      // 按更新时间排序，取最新一条
+      // 最新更新的节目
       const latest = data.sort(
         (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       )[0];
 
-      // 封面图（如果有 fanart，则显示）
       const cover = latest.images?.fanart?.full ?? '';
 
       container.innerHTML = `
@@ -57,3 +55,5 @@ export const traktWidget = new Widget({
     }
   },
 });
+
+export default traktWidget;
