@@ -5,7 +5,7 @@ WidgetMetadata = {
   author: "seven",
   version: "1.0.0",
   requiredVersion: "0.0.1",
-  site: "https://t.me/MakkaPakkaOvO",
+  site: "https://github.com/c77seven/11",
   detailCacheDuration: 60,
   modules: [
     // =============豆瓣模块=============
