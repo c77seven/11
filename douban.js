@@ -1,7 +1,4 @@
-/**
- * WidgetMetadata 定义
- */
-const WidgetMetadata = {
+WidgetMetadata = {
   id: "douban_hot",
   title: "豆瓣热播",
   description: "豆瓣热门影视榜单 (网页增强版)",
