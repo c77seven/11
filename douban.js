@@ -1,77 +1,62 @@
 WidgetMetadata = {
-  id: "douban_hot_full",
-  title: "豆瓣榜单",
-  description: "豆瓣热播电影/剧集/动画/综艺",
-  author: "七七",
-  site: "https://douban.com",
+  id: "douban_hot",
+  title: "豆瓣热播",
+  description: "豆瓣热门影视榜单",
+  author: "seven",
   version: "1.0.0",
   requiredVersion: "0.0.1",
   modules: [
 
     {
       title: "🔥 热播电影",
-      functionName: "movieHot",
-      cacheDuration: 3600,
-      params: [{ name: "page", type: "page", startPage: 1 }]
+      functionName: "movie",
+      cacheDuration: 3600
     },
 
     {
       title: "📺 热播剧集",
-      functionName: "tvHot",
-      cacheDuration: 3600,
-      params: [{ name: "page", type: "page", startPage: 1 }]
+      functionName: "tv",
+      cacheDuration: 3600
     },
 
     {
       title: "🎨 热播动画",
-      functionName: "animeHot",
-      cacheDuration: 3600,
-      params: [{ name: "page", type: "page", startPage: 1 }]
+      functionName: "anime",
+      cacheDuration: 3600
     },
 
     {
       title: "🎤 热播综艺",
-      functionName: "varietyHot",
-      cacheDuration: 3600,
-      params: [{ name: "page", type: "page", startPage: 1 }]
-    },
-
-    {
-      title: "📈 一周口碑榜",
-      functionName: "weeklyHot",
-      cacheDuration: 3600,
-      params: [{ name: "page", type: "page", startPage: 1 }]
+      functionName: "show",
+      cacheDuration: 3600
     }
 
   ]
 };
 
-async function movieHot(params = {}) {
-  return load("movie_hot", params.page);
+
+async function movie() {
+  return load("movie_hot");
 }
 
-async function tvHot(params = {}) {
-  return load("tv_hot", params.page);
+async function tv() {
+  return load("tv_hot");
 }
 
-async function animeHot(params = {}) {
-  return load("tv_animation", params.page);
+async function anime() {
+  return load("tv_animation");
 }
 
-async function varietyHot(params = {}) {
-  return load("show_hot", params.page);
+async function show() {
+  return load("show_hot");
 }
 
-async function weeklyHot(params = {}) {
-  return load("tv_weekly_best", params.page);
-}
 
-async function load(type, page = 1) {
 
-  const start = (page - 1) * 20;
+async function load(type) {
 
   const url =
-  `https://m.douban.com/rexxar/api/v2/subject_collection/${type}/items?start=${start}&count=20`;
+  `https://m.douban.com/rexxar/api/v2/subject_collection/${type}/items?start=0&count=20`;
 
   const res = await Widget.http.get(url,{
     headers:{
@@ -82,31 +67,25 @@ async function load(type, page = 1) {
 
   const data = JSON.parse(res.body);
 
-  const list =
-  data.subject_collection_items ||
-  data.items ||
-  [];
+  const list = data.subject_collection_items || [];
 
   return list.map(item => ({
 
-    id: item.id || item.title,
+    id: String(item.id),
 
     type: "video",
 
     title: item.title,
 
-    cover: item.cover?.url ||
-           item.pic?.normal ||
-           "",
+    cover: item.cover?.url,
 
     description:
-      (item.rating?.value
-        ? `⭐ ${item.rating.value}`
-        : "暂无评分") +
+      item.rating?.value
+      ? `⭐ ${item.rating.value}`
+      : "暂无评分",
 
-      (item.year
-        ? ` · ${item.year}`
-        : "")
+    link:
+      `https://movie.douban.com/subject/${item.id}/`
 
   }));
 
