@@ -1,70 +1,103 @@
-WidgetMetadata = {
+/**
+ * WidgetMetadata 定义
+ */
+const WidgetMetadata = {
   id: "douban_hot",
   title: "豆瓣热播",
-  description: "豆瓣热门影视榜单",
+  description: "豆瓣热门影视榜单 (网页增强版)",
   author: "seven",
-  version: "1.0.1", // 更新版本号
+  version: "1.1.0",
   requiredVersion: "0.0.1",
   modules: [
-    { title: "🔥 热播电影", functionName: "movie", cacheDuration: 3600 },
-    { title: "📺 热播剧集", functionName: "tv", cacheDuration: 3600 },
-    { title: "🎨 热播动画", functionName: "anime", cacheDuration: 3600 },
-    { title: "🎤 热播综艺", functionName: "show", cacheDuration: 3600 }
+    { title: "🔥 电影榜", functionName: "movie", cacheDuration: 3600 },
+    { title: "📺 电视剧", functionName: "tv", cacheDuration: 3600 },
+    { title: "🎨 动画榜", functionName: "anime", cacheDuration: 3600 },
+    { title: "🎤 综艺榜", functionName: "show", cacheDuration: 3600 }
   ]
 };
 
-async function movie() { return load("movie_hot"); }
-async function tv() { return load("tv_hot"); }
-async function anime() { return load("tv_animation"); }
-async function show() { return load("show_hot"); }
+/**
+ * 模块入口函数
+ */
+async function movie() { return load("movie"); }
+async function tv() { return load("tv"); }
+async function anime() { return load("tv"); } // 网页版动画通常合并在剧集中
+async function show() { return load("tv"); }
 
-async function load(type) {
-  const url = `https://m.douban.com/rexxar/api/v2/subject_collection/${type}/items?start=0&count=20`;
-
+/**
+ * 核心加载函数
+ * @param {string} category - 类别: movie 或 tv
+ */
+async function load(category) {
+  // 豆瓣电影排行榜网页 URL
+  const url = `https://movie.douban.com/chart`;
+  
   try {
-    const res = await Widget.http.get(url, {
+    const response = await Widget.http.get(url, {
       headers: {
-        // 1. 优化 Headers：伪装成真实的手机 Safari 浏览器
-        "Referer": "https://m.douban.com/movie/",
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
-        "Accept": "application/json, text/plain, */*",
-        "Connection": "keep-alive"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+        "Host": "movie.douban.com",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9"
       }
     });
 
-    // 2. 拦截空数据或 "undefined" 字符串
-    if (!res || !res.body || res.body === "undefined") {
-      console.error(`[${type}] 请求失败: 响应为空或未定义`);
-      return []; // 返回空数组避免后续渲染崩溃
-    }
-
-    // 3. 安全解析 JSON
-    let data;
-    try {
-      data = JSON.parse(res.body);
-    } catch (parseError) {
-      // 截取前 100 个字符方便调试，避免被长 HTML 刷屏
-      const snippet = String(res.body).substring(0, 100);
-      console.error(`[${type}] JSON 解析失败，可能触发了豆瓣反爬验证。返回内容: ${snippet}...`);
+    // 1. 防御性检查：确保 response 和 body 存在
+    if (!response || !response.body) {
+      console.error("❌ 未能获取到网页内容，响应为空");
       return [];
     }
 
-    // 4. 安全提取列表
-    const list = data.subject_collection_items || [];
+    const html = response.body;
 
-    return list.map(item => ({
-      id: String(item.id),
-      type: "video",
-      title: item.title,
-      // 使用可选链 (?.) 并在缺失图片时提供空字符串，防止报错
-      cover: item.cover?.url || "",
-      description: item.rating?.value ? `⭐ ${item.rating.value}` : "暂无评分",
-      link: `https://movie.douban.com/subject/${item.id}/`
-    }));
+    // 2. 检查是否撞到了豆瓣的登录墙或验证码
+    if (html.includes("login") || html.includes("captcha")) {
+      console.error("⚠️ 触发了豆瓣反爬验证，请在浏览器中打开豆瓣手动验证后再试");
+      return [];
+    }
 
-  } catch (networkError) {
-    // 5. 捕获网络层面的错误（如断网、超时）
-    console.error(`[${type}] 网络请求异常:`, networkError);
-    return [];
+    // 3. 使用正则解析 HTML (针对豆瓣排行榜页面的结构)
+    // 匹配结构：<a class="nbg" href="URL" title="TITLE"> <img src="COVER"
+    const itemRegex = /<a class="nbg" href="(https:\/\/movie\.douban\.com\/subject\/(\d+)\/)"\s+title="(.*?)">[\s\S]*?<img src="(.*?)"/g;
+    
+    const results = [];
+    let match;
+
+    // 循环提取前 10 条数据
+    while ((match = itemRegex.exec(html)) !== null && results.length < 15) {
+      const [_, link, id, title, cover] = match;
+      
+      results.push({
+        id: id,
+        type: "video",
+        title: title,
+        cover: cover.replace('s_ratio_poster', 'm_ratio_poster'), // 换成中等尺寸图
+        description: "豆瓣热门更新",
+        link: link
+      });
+    }
+
+    // 4. 如果正则没匹配到，尝试第二种常见的列表结构
+    if (results.length === 0) {
+        console.warn("⚠️ 正则匹配为空，尝试解析备用结构...");
+        const altRegex = /<img src="(.*?)" alt="(.*?)"[\s\S]*?href="(https:\/\/movie\.douban\.com\/subject\/(\d+)\/)"/g;
+        while ((match = altRegex.exec(html)) !== null && results.length < 10) {
+            results.push({
+                id: match[4],
+                type: "video",
+                title: match[2],
+                cover: match[1],
+                description: "热门推荐",
+                link: match[3]
+            });
+        }
+    }
+
+    console.log(`✅ 成功抓取 ${results.length} 条数据`);
+    return results;
+
+  } catch (error) {
+    console.error("🚨 脚本执行发生异常:", error.message);
+    return []; // 发生错误时返回空数组，防止 UI 崩溃
   }
 }
