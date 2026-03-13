@@ -1,14 +1,14 @@
 /**
- * 豆瓣热播 Widget (动画修复版)
- * 基于你提供的稳定版修改：保持电视剧/综艺可用，专门修复动画分类
+ * 豆瓣热播 Widget (动画分类终极修复版)
+ * 目标：解决“热播剧集”分类下的动画加载问题
  */
 
 WidgetMetadata = {
-  id: "douban_hot_aggregator",
+  id: "douban_hot_aggregator_final",
   title: "豆瓣热播",
-  description: "自动过滤季数后缀，修复动漫/电视剧/综艺分类",
+  description: "支持电视剧、综艺及热播动画，自动清洗季数",
   author: "编码助手",
-  version: "1.3.1",
+  version: "1.3.2",
   requiredVersion: "0.0.3",
   
   modules: [
@@ -43,11 +43,12 @@ async function loadDoubanList(params = {}) {
   try {
     const { category = "电视剧", page_limit = 20 } = params;
     
-    // 核心修复点：针对动画分类，豆瓣接口通常识别 "动漫" 标签效果更好
+    // 映射表：电视剧用“热门”，综艺用“综艺”，动漫用“动画”
+    // 注意：在 type=tv 情况下，tag 必须是“动画”才能匹配到热播番剧
     const tagMap = { 
       "电视剧": "热门", 
       "综艺": "综艺", 
-      "动漫": "动漫"  // 此处从 "动画" 改为 "动漫"
+      "动漫": "动画" 
     };
     
     const targetTag = tagMap[category] || category;
@@ -55,34 +56,34 @@ async function loadDoubanList(params = {}) {
     const url = "https://movie.douban.com/j/search_subjects";
     const response = await Widget.http.get(url, {
       params: {
-        type: 'tv',
+        type: 'tv', // 保持 TV 类型，因为动画也是剧集的一种
         tag: targetTag,
         sort: 'recommend',
         page_limit: page_limit,
         page_start: 0
       },
       headers: {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
-        "Referer": "https://movie.douban.com/tv/"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+        "Referer": "https://movie.douban.com/tv/" // 模拟从剧集频道进入
       }
     });
 
-    if (!response || !response.data || !response.data.subjects) return [];
-
-    // 如果“动漫”标签依然返回空，尝试最后的备选方案：直接请求“热门”但过滤名称
-    let subjects = response.data.subjects;
-    if (subjects.length === 0 && category === "动漫") {
-       console.log("动漫标签无数据，尝试备选搜索...");
-       // 这里可以添加二次尝试逻辑，但通常修改 tag 为 "动漫" 即可解决
+    if (!response || !response.data || !response.data.subjects || response.data.subjects.length === 0) {
+      // 如果“动画”还是空，尝试一个针对动漫的特殊标签组合
+      if (category === "动漫") {
+        console.log("尝试动漫备用标签...");
+        return await retryAnime(page_limit);
+      }
+      return [];
     }
 
-    return subjects.map(item => {
-      // 标题清洗逻辑：移除季数、部数
+    return response.data.subjects.map(item => {
+      // 标题清洗：移除 第X季/部/期、Season、S等
       const cleanTitle = item.title
         .replace(/第[一二三四五六七八九十\d]+[季部期]/g, '')
         .replace(/Season\s?\d+/gi, '')
         .replace(/S\d+/gi, '')
-        .replace(/(最终季|完结篇|特别篇)/g, '') // 增加常见后缀过滤
+        .replace(/(最终季|完结篇|特别篇)/g, '')
         .replace(/\s\d+$/g, '') 
         .trim();
 
@@ -101,4 +102,25 @@ async function loadDoubanList(params = {}) {
     console.error("加载失败:", error);
     return [];
   }
+}
+
+// 动漫分类专属备用函数（当标准标签失效时）
+async function retryAnime(limit) {
+  const url = "https://movie.douban.com/j/search_subjects";
+  const resp = await Widget.http.get(url, {
+    params: { type: 'tv', tag: '动漫', sort: 'recommend', page_limit: limit, page_start: 0 },
+    headers: { "Referer": "https://movie.douban.com/tv/" }
+  });
+  
+  if (!resp?.data?.subjects) return [];
+  
+  return resp.data.subjects.map(item => ({
+    id: item.id,
+    type: "douban",
+    title: item.title.replace(/第[一二三四五六七八九十\d]+[季部期]/g, '').trim(),
+    rating: parseFloat(item.rate) || 0,
+    coverUrl: item.cover,
+    link: item.url,
+    description: `评分: ${item.rate}`
+  }));
 }
