@@ -1,15 +1,15 @@
 /**
- * 豆瓣热播 Widget (全接口兼容版)
- * 修复：动画、电视剧无法加载的问题
- * 优化：自动过滤季数后缀
+ * 豆瓣热播 Widget (分流修复版)
+ * 1. 修复：动画、电视剧空数据问题
+ * 2. 修复：标题季数过滤
  */
 
 WidgetMetadata = {
-  id: "douban_hot_aggregator_v2",
+  id: "douban_hot_aggregator_v3",
   title: "豆瓣热播",
-  description: "支持电视剧、综艺、动画，自动清洗标题",
+  description: "全分类适配 + 标题纯净化",
   author: "编码助手",
-  version: "1.4.0",
+  version: "1.5.0",
   requiredVersion: "0.0.3",
   
   modules: [
@@ -17,7 +17,6 @@ WidgetMetadata = {
       title: "热播内容",
       functionName: "loadDoubanList",
       type: "video",
-      cacheDuration: 3600,
       params: [
         {
           name: "category",
@@ -45,50 +44,61 @@ async function loadDoubanList(params = {}) {
   try {
     const { category = "电视剧", page_limit = 20 } = params;
     
-    // 映射豆瓣 new_search_subjects 接口的标签
-    const genreMap = {
-      "电视剧": "电视剧",
-      "综艺": "综艺",
-      "动漫": "动画"
-    };
-    
-    const targetGenre = genreMap[category] || "电视剧";
-    
-    // 使用更稳定的“新版搜索”接口
-    const url = "https://movie.douban.com/j/new_search_subjects";
+    // --- 核心逻辑：针对不同分类调整参数 ---
+    let apiTag = "";
+    let apiType = "tv";
+
+    if (category === "动漫") {
+      apiTag = "动画"; 
+      apiType = "tv";
+    } else if (category === "电视剧") {
+      apiTag = "剧集"; // 尝试使用“剧集”代替“电视剧”，这是豆瓣接口的常用高频标签
+      apiType = "tv";
+    } else {
+      apiTag = "综艺";
+      apiType = "tv";
+    }
+
+    const url = "https://movie.douban.com/j/search_subjects";
     
     const response = await Widget.http.get(url, {
       params: {
-        sort: 'U',          // 近期热门排序
-        range: '0,10',      // 评分范围 0-10
-        tags: '',           // 留空，使用 genres 过滤
-        genres: targetGenre,
-        start: 0,
-        limit: page_limit
+        type: apiType,
+        tag: apiTag,
+        sort: 'recommend',
+        page_limit: page_limit,
+        page_start: 0
       },
       headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://movie.douban.com/explore"
+        // 模拟移动端浏览器，绕过部分复杂的桌面端校验
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Mobile/15E148 Safari/604.1",
+        "Referer": "https://m.douban.com/movie/"
       }
     });
 
-    if (!response || !response.data || !response.data.data) {
-      console.error(`[接口报错] ${category} 无法获取数据`);
+    if (!response || !response.data || !response.data.subjects || response.data.subjects.length === 0) {
+      // 备选方案：如果“剧集”标签也失败，尝试最通用的“热门”
+      if (apiTag !== "热门") {
+        console.log(`[重试] 尝试使用热门标签获取 ${category}`);
+        params.category = "热门"; 
+        return loadDoubanList({ category: "热门", page_limit });
+      }
       return [];
     }
 
-    // 处理数据并清洗标题
-    return response.data.data.map(item => {
-      // 1. 获取原始标题
-      let rawTitle = item.title;
-
-      // 2. 正则清洗季数、部数 (如：第一季, Season 2, S3, 大江大河2)
-      const cleanTitle = rawTitle
+    // --- 标题清洗逻辑 ---
+    return response.data.subjects.map(item => {
+      let cleanTitle = item.title
+        // 1. 移除 第X季/部/期
         .replace(/第[一二三四五六七八九十\d]+[季部期]/g, '')
+        // 2. 移除 最终季/完结篇
+        .replace(/(最终季|完结篇|特别篇)/g, '')
+        // 3. 移除 Season/S 后缀
         .replace(/Season\s?\d+/gi, '')
         .replace(/S\d+/gi, '')
-        .replace(/\s\d+$/g, '') 
-        .trim();
+        // 4. 移除末尾空格和孤立数字
+        .trim()
+        .replace(/\s\d+$/g, '');
 
       return {
         id: item.id,
@@ -97,15 +107,12 @@ async function loadDoubanList(params = {}) {
         rating: parseFloat(item.rate) || 0,
         coverUrl: item.cover,
         link: item.url,
-        description: `评分: ${item.rate}`,
-        extra: {
-          originalTitle: rawTitle // 保留原始标题备用
-        }
+        description: `评分: ${item.rate}`
       };
     });
 
   } catch (error) {
-    console.error("Widget 加载失败:", error);
+    console.error("加载异常:", error);
     return [];
   }
 }
