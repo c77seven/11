@@ -1,14 +1,15 @@
 /**
- * 豆瓣热播 Widget (标题纯净版)
- * 修复：电视剧/动漫获取、标题季数过滤
+ * 豆瓣热播 Widget (全接口兼容版)
+ * 修复：动画、电视剧无法加载的问题
+ * 优化：自动过滤季数后缀
  */
 
 WidgetMetadata = {
-  id: "douban_hot_aggregator",
+  id: "douban_hot_aggregator_v2",
   title: "豆瓣热播",
-  description: "自动过滤季数后缀的豆瓣热播列表",
+  description: "支持电视剧、综艺、动画，自动清洗标题",
   author: "编码助手",
-  version: "1.3.0",
+  version: "1.4.0",
   requiredVersion: "0.0.3",
   
   modules: [
@@ -16,6 +17,7 @@ WidgetMetadata = {
       title: "热播内容",
       functionName: "loadDoubanList",
       type: "video",
+      cacheDuration: 3600,
       params: [
         {
           name: "category",
@@ -43,29 +45,45 @@ async function loadDoubanList(params = {}) {
   try {
     const { category = "电视剧", page_limit = 20 } = params;
     
-    const tagMap = { "电视剧": "热门", "综艺": "综艺", "动漫": "动画" };
-    const targetTag = tagMap[category] || category;
+    // 映射豆瓣 new_search_subjects 接口的标签
+    const genreMap = {
+      "电视剧": "电视剧",
+      "综艺": "综艺",
+      "动漫": "动画"
+    };
     
-    const url = "https://movie.douban.com/j/search_subjects";
+    const targetGenre = genreMap[category] || "电视剧";
+    
+    // 使用更稳定的“新版搜索”接口
+    const url = "https://movie.douban.com/j/new_search_subjects";
+    
     const response = await Widget.http.get(url, {
       params: {
-        type: 'tv',
-        tag: targetTag,
-        sort: 'recommend',
-        page_limit: page_limit,
-        page_start: 0
+        sort: 'U',          // 近期热门排序
+        range: '0,10',      // 评分范围 0-10
+        tags: '',           // 留空，使用 genres 过滤
+        genres: targetGenre,
+        start: 0,
+        limit: page_limit
       },
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://movie.douban.com/"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://movie.douban.com/explore"
       }
     });
 
-    if (!response || !response.data || !response.data.subjects) return [];
+    if (!response || !response.data || !response.data.data) {
+      console.error(`[接口报错] ${category} 无法获取数据`);
+      return [];
+    }
 
-    return response.data.subjects.map(item => {
-      // 标题清洗逻辑
-      const cleanTitle = item.title
+    // 处理数据并清洗标题
+    return response.data.data.map(item => {
+      // 1. 获取原始标题
+      let rawTitle = item.title;
+
+      // 2. 正则清洗季数、部数 (如：第一季, Season 2, S3, 大江大河2)
+      const cleanTitle = rawTitle
         .replace(/第[一二三四五六七八九十\d]+[季部期]/g, '')
         .replace(/Season\s?\d+/gi, '')
         .replace(/S\d+/gi, '')
@@ -79,12 +97,15 @@ async function loadDoubanList(params = {}) {
         rating: parseFloat(item.rate) || 0,
         coverUrl: item.cover,
         link: item.url,
-        description: `评分: ${item.rate}`
+        description: `评分: ${item.rate}`,
+        extra: {
+          originalTitle: rawTitle // 保留原始标题备用
+        }
       };
     });
 
   } catch (error) {
-    console.error("加载失败:", error);
+    console.error("Widget 加载失败:", error);
     return [];
   }
 }
