@@ -1,16 +1,15 @@
 /**
- * 豆瓣热播 Widget (分类适配增强版)
- * 修复：动漫分类无数据问题
- * 优化：标题季数过滤
+ * 豆瓣热播 Widget (实时热播同步版)
+ * 修复：动漫分类数据不实时、数据陈旧问题
+ * 优化：标题清洗、排序逻辑
  */
 
 WidgetMetadata = {
-  id: "douban_hot_aggregator_fixed",
+  id: "douban_hot_realtime",
   title: "豆瓣热播",
-  description: "支持电视剧、综艺及动画，自动清洗季数",
+  description: "实时获取豆瓣热播电视剧、综艺和新番动漫",
   author: "编码助手",
-  version: "1.3.5",
-  requiredVersion: "0.0.3",
+  version: "1.4.0",
   
   modules: [
     {
@@ -44,15 +43,21 @@ async function loadDoubanList(params = {}) {
   try {
     const { category = "电视剧", page_limit = 20 } = params;
     
-    // --- 关键逻辑：标签映射 ---
     let targetTag = "热门";
+    let sortType = "recommend"; // 默认推荐
+
+    // 针对“热播”需求调整参数
     if (category === "综艺") {
       targetTag = "综艺";
+      sortType = "time"; // 综艺通常按时间排最新
     } else if (category === "动漫") {
-      // 核心修复：在热播剧集接口中，使用“日本动画”作为动漫分类的抓取标签最为稳定
+      // 抓取热播新番，"日本动画" 配合 "time" 排序是豆瓣最快更新的路径
       targetTag = "日本动画"; 
+      sortType = "time"; 
     } else {
-      targetTag = "热门"; // 电视剧使用“热门”
+      // 电视剧使用 "热门" 配合 "recommend" 在豆瓣逻辑里即为“热播”
+      targetTag = "热门";
+      sortType = "recommend";
     }
     
     const url = "https://movie.douban.com/j/search_subjects";
@@ -60,12 +65,12 @@ async function loadDoubanList(params = {}) {
       params: {
         type: 'tv',
         tag: targetTag,
-        sort: 'recommend',
+        sort: sortType,
         page_limit: page_limit,
         page_start: 0
       },
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
         "Referer": "https://movie.douban.com/tv/"
       }
     });
@@ -73,7 +78,7 @@ async function loadDoubanList(params = {}) {
     if (!response || !response.data || !response.data.subjects) return [];
 
     return response.data.subjects.map(item => {
-      // 标题清洗逻辑
+      // 标题清洗：精准过滤季数
       const cleanTitle = item.title
         .replace(/第[一二三四五六七八九十\d]+[季部期]/g, '')
         .replace(/Season\s?\d+/gi, '')
@@ -89,7 +94,7 @@ async function loadDoubanList(params = {}) {
         rating: parseFloat(item.rate) || 0,
         coverUrl: item.cover,
         link: item.url,
-        description: `评分: ${item.rate}`
+        description: `评分: ${item.rate}${item.is_new ? ' (新推)' : ''}`
       };
     });
 
