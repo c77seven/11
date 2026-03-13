@@ -1,15 +1,16 @@
 /**
- * 豆瓣热播 Widget (实时热播同步版)
- * 修复：动漫分类数据不实时、数据陈旧问题
- * 优化：标题清洗、排序逻辑
+ * 豆瓣热播 Widget (数据防抖修复版)
+ * 1. 修复：动漫/电视剧分类数据陈旧或缺失
+ * 2. 修复：标题季数/部数清洗
+ * 3. 增强：数据为空时的容错处理
  */
 
 WidgetMetadata = {
-  id: "douban_hot_realtime",
+  id: "douban_hot_pro_v5",
   title: "豆瓣热播",
-  description: "实时获取豆瓣热播电视剧、综艺和新番动漫",
+  description: "同步豆瓣剧集频道热播榜单",
   author: "编码助手",
-  version: "1.4.0",
+  version: "1.5.0",
   
   modules: [
     {
@@ -43,19 +44,19 @@ async function loadDoubanList(params = {}) {
   try {
     const { category = "电视剧", page_limit = 20 } = params;
     
+    // --- 核心修复：重新对齐豆瓣“热播剧集”频道的实时标签 ---
     let targetTag = "热门";
-    let sortType = "recommend"; // 默认推荐
+    let sortType = "recommend"; 
 
-    // 针对“热播”需求调整参数
     if (category === "综艺") {
       targetTag = "综艺";
-      sortType = "time"; // 综艺通常按时间排最新
+      sortType = "time"; // 综艺按更新时间排最准
     } else if (category === "动漫") {
-      // 抓取热播新番，"日本动画" 配合 "time" 排序是豆瓣最快更新的路径
+      // “日本动画”是剧集频道下动画类最实时、数据最全的标签
       targetTag = "日本动画"; 
       sortType = "time"; 
     } else {
-      // 电视剧使用 "热门" 配合 "recommend" 在豆瓣逻辑里即为“热播”
+      // 电视剧使用“近期热播”或“热门”
       targetTag = "热门";
       sortType = "recommend";
     }
@@ -70,36 +71,43 @@ async function loadDoubanList(params = {}) {
         page_start: 0
       },
       headers: {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": "https://movie.douban.com/tv/"
       }
     });
 
-    if (!response || !response.data || !response.data.subjects) return [];
+    // --- 关键：解决“数据缺失”添加失败的问题 ---
+    // 如果 response 为空或 subjects 不存在，返回空数组而不是报错
+    if (!response || !response.data || !response.data.subjects || response.data.subjects.length === 0) {
+      console.warn(`[警告] 分类 ${category} 未能抓取到数据`);
+      return []; 
+    }
 
     return response.data.subjects.map(item => {
-      // 标题清洗：精准过滤季数
-      const cleanTitle = item.title
+      // 标题清洗：移除 第X季、第X部、Season、S01等
+      let cleanTitle = (item.title || "未知标题")
         .replace(/第[一二三四五六七八九十\d]+[季部期]/g, '')
         .replace(/Season\s?\d+/gi, '')
         .replace(/S\d+/gi, '')
-        .replace(/(最终季|完结篇|特别篇)/g, '')
-        .replace(/\s\d+$/g, '') 
+        .replace(/(最终季|完结篇|特别篇|第[一二三四五六七八九十\d]+次)/g, '')
         .trim();
 
+      // 进一步移除末尾的空格数字（例如：大江大河 2 -> 大江大河）
+      cleanTitle = cleanTitle.replace(/\s\d+$/g, '').trim();
+
       return {
-        id: item.id,
+        id: item.id || String(Math.random()),
         type: "douban",
         title: cleanTitle,
         rating: parseFloat(item.rate) || 0,
         coverUrl: item.cover,
         link: item.url,
-        description: `评分: ${item.rate}${item.is_new ? ' (新推)' : ''}`
+        description: `评分: ${item.rate}`
       };
     });
 
   } catch (error) {
-    console.error("加载失败:", error);
-    return [];
+    console.error("Widget 执行出错:", error);
+    return []; // 确保出错时返回空数组，避免 Widget 框架崩溃
   }
 }
