@@ -1,15 +1,15 @@
 /**
- * 豆瓣热播 & 个性化推荐 Widget
- * 1. 保持：电视剧、综艺、动漫稳定获取
- * 2. 新增：基于 Cookie 的“猜你喜欢”个性化推荐
+ * 豆瓣综合推荐 Widget
+ * 修复：个性化推荐接口导致的格式不正确报错
+ * 保持：1.3.5 版本原汁原味的热播功能
  */
 
 WidgetMetadata = {
-  id: "douban_aggregator_pro",
+  id: "douban_all_in_one_fixed",
   title: "豆瓣推荐",
-  description: "支持热播分类与个性化推荐，自动清洗标题",
+  description: "热播分类与猜你喜欢，修复数据格式报错",
   author: "编码助手",
-  version: "2.0.0",
+  version: "2.1.0",
   
   modules: [
     {
@@ -33,53 +33,20 @@ WidgetMetadata = {
     },
     {
       title: "猜你喜欢",
-      functionName: "loadDoubanList",
+      functionName: "loadPersonalized",
       type: "video",
       params: [
-        { name: "category", title: "模式", type: "constant", value: "个性化推荐" },
-        { name: "db_cookie", title: "豆瓣Cookie(选填)", type: "string", value: "" },
+        { name: "db_cookie", title: "豆瓣Cookie(必填)", type: "string", value: "" },
         { name: "page_limit", title: "数量", type: "constant", value: "20" }
       ]
     }
   ]
 };
 
+// --- 模块 1：你最稳定的 1.3.5 热播逻辑 ---
 async function loadDoubanList(params = {}) {
   try {
-    const { category = "电视剧", page_limit = 20, db_cookie = "" } = params;
-    
-    // --- 分支 1：个性化推荐逻辑 ---
-    if (category === "个性化推荐") {
-      const url = "https://m.douban.com/rexxar/api/v2/recommend_feed";
-      const response = await Widget.http.get(url, {
-        params: { for_mobile: 1, next_date: "" },
-        headers: {
-          "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
-          "Referer": "https://m.douban.com/",
-          "Cookie": db_cookie, // 只有填了 Cookie 才会个性化
-          "Host": "m.douban.com"
-        }
-      });
-
-      if (!response || !response.data || !response.data.recommend_feeds) return [];
-      
-      return response.data.recommend_feeds
-        .filter(f => f.target && (f.target.type === 'movie' || f.target.type === 'tv'))
-        .map(feed => {
-          const item = feed.target;
-          return {
-            id: String(item.id),
-            type: "douban",
-            title: cleanTitleText(item.title),
-            rating: item.rating ? item.rating.value : 0,
-            coverUrl: item.cover_url || (item.card_background && item.card_background.url),
-            link: item.uri,
-            description: item.card_subtitle || `评分: ${item.rating ? item.rating.value : '暂无'}`
-          };
-        });
-    }
-
-    // --- 分支 2：原 1.3.5 稳定版逻辑 ---
+    const { category = "电视剧", page_limit = 20 } = params;
     let targetTag = "热门";
     if (category === "综艺") targetTag = "综艺";
     else if (category === "动漫") targetTag = "日本动画";
@@ -110,16 +77,59 @@ async function loadDoubanList(params = {}) {
       link: item.url,
       description: `评分: ${item.rate}`
     }));
-
-  } catch (error) {
-    console.error("加载失败:", error);
+  } catch (e) {
     return [];
   }
 }
 
-// 提取出的统一清洗函数（保持你最满意的正则逻辑）
+// --- 模块 2：个性化推荐 (格式重构) ---
+async function loadPersonalized(params = {}) {
+  try {
+    const { db_cookie = "", page_limit = 20 } = params;
+    // 使用个性化接口
+    const url = "https://m.douban.com/rexxar/api/v2/recommend_feed";
+    
+    const response = await Widget.http.get(url, {
+      params: { for_mobile: 1, limit: page_limit },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+        "Referer": "https://m.douban.com/",
+        "Cookie": db_cookie,
+        "Host": "m.douban.com"
+      }
+    });
+
+    // 格式校验防护
+    if (!response || !response.data || !Array.isArray(response.data.recommend_feeds)) {
+      return [];
+    }
+    
+    const results = [];
+    for (const feed of response.data.recommend_feeds) {
+      const target = feed.target;
+      // 只提取影视类型数据，过滤掉话题、日记等
+      if (target && (target.type === 'movie' || target.type === 'tv')) {
+        results.push({
+          id: String(target.id),
+          type: "douban",
+          title: cleanTitleText(target.title),
+          rating: target.rating ? (target.rating.value || 0) : 0,
+          coverUrl: target.cover_url || (target.card_background && target.card_background.url) || "",
+          link: target.uri || "",
+          description: target.card_subtitle || `评分: ${target.rating ? target.rating.value : '暂无'}`
+        });
+      }
+    }
+    return results;
+  } catch (error) {
+    console.error("个性化接口异常:", error);
+    return [];
+  }
+}
+
+// 统一标题清洗函数
 function cleanTitleText(title) {
-  if (!title) return "";
+  if (!title) return "未知名称";
   return title
     .replace(/第[一二三四五六七八九十\d]+[季部期]/g, '')
     .replace(/Season\s?\d+/gi, '')
