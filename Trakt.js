@@ -164,6 +164,8 @@ async function buildPublicItem(row, section) {
 
 function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle) {
     const dateText = formatPosterUpdateDate(airDate, ep);
+    const badgeText = formatOverlayTime(airDate);
+    const episodeText = formatEpisodeText(ep);
     const genre = firstGenre(d);
     const episodeTitle = ep && ep.name ? ep.name : (ep && ep.title ? ep.title : "");
 
@@ -173,10 +175,11 @@ function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle) 
         type: "tmdb",
         mediaType: "tv",
         title: d.name || fallback.title,
-        genreTitle: compact([formatShortDate(airDate), genre]).join(" · "),
+        genreTitle: genre,
         subTitle: "",
-        releaseDate: dateText,
+        releaseDate: episodeText,
         year: airDate ? airDate.substring(0, 4) : "",
+        durationText: badgeText,
         posterPath: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : "",
         description: compact([
             sourceTitle,
@@ -190,6 +193,7 @@ function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle) 
 
 function buildMovieVideoItem(d, fallback, releaseDate, sourceTitle) {
     const date = clean(releaseDate).slice(0, 10);
+    const badgeText = formatOverlayTime(date);
     const genre = firstGenre(d);
 
     return {
@@ -198,10 +202,11 @@ function buildMovieVideoItem(d, fallback, releaseDate, sourceTitle) {
         type: "tmdb",
         mediaType: "movie",
         title: d.title || fallback.title,
-        genreTitle: compact([formatShortDate(date), genre]).join(" · "),
+        genreTitle: genre,
         subTitle: "",
-        releaseDate: formatMovieDate(date),
+        releaseDate: "",
         year: date ? date.substring(0, 4) : "",
+        durationText: badgeText,
         posterPath: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : "",
         description: compact([
             sourceTitle,
@@ -242,10 +247,59 @@ function formatMovieDate(date) {
     return `${year}/${month}.${day}`;
 }
 
-function formatShortDate(date) {
-    const cleanDate = clean(date).slice(0, 10);
-    if (!cleanDate) return "";
-    return `${Number(cleanDate.substring(5, 7))}.${Number(cleanDate.substring(8, 10))}`;
+function formatEpisodeText(ep) {
+    if (!ep) return "";
+
+    const season = ep.season_number || ep.season;
+    const episode = ep.episode_number || ep.number;
+    const title = ep.name || ep.title || "";
+    const code = season || episode ? `S${season || "?"}•E${episode || "?"}` : "";
+    return compact([code, title]).join(" - ");
+}
+
+function formatOverlayTime(value) {
+    const text = clean(value);
+    if (!text) return "";
+
+    const hasTime = text.indexOf("T") > -1;
+    const dateText = text.slice(0, 10);
+
+    if (hasTime) {
+        const target = new Date(text);
+        if (!isNaN(target.getTime())) {
+            const diffMs = target.getTime() - new Date().getTime();
+            const diffHours = Math.round(diffMs / 3600000);
+            if (diffMs >= 0 && diffHours < 24) {
+                return diffHours <= 0 ? "即将播出" : `${diffHours}小时后`;
+            }
+            if (diffMs < 0 && Math.abs(diffHours) < 24) {
+                return `${Math.abs(diffHours)}小时前`;
+            }
+        }
+    }
+
+    const dayDiff = daysBetween(todayDate(), dateText);
+    if (dayDiff === 0) return "今天";
+    if (dayDiff === 1) return "明天";
+    if (dayDiff === 2) return "后天";
+    if (dayDiff > 2) return `${dayDiff}天后`;
+    if (dayDiff === -1) return "昨天";
+    if (dayDiff < -1) return `${Math.abs(dayDiff)}天前`;
+    return "";
+}
+
+function daysBetween(startDate, endDate) {
+    const start = parseLocalDate(startDate);
+    const end = parseLocalDate(endDate);
+    if (!start || !end) return 0;
+    return Math.round((end.getTime() - start.getTime()) / 86400000);
+}
+
+function parseLocalDate(dateText) {
+    const text = clean(dateText).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+    const parts = text.split("-");
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
 }
 
 function isTodayOrFuture(date) {
