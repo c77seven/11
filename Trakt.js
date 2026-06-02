@@ -49,7 +49,45 @@ WidgetMetadata = {
       functionName: "loadTraktShows",
       cacheDuration: 1800,
       requiresWebView: false,
-      params: calendarParams("shows"),
+      params: [
+        {
+          name: "startDate",
+          title: "开始日期",
+          type: "input",
+          placeholders: [{ title: "YYYY-MM-DD，留空为今天 UTC", value: "" }],
+        },
+        { name: "days", title: "天数", type: "count", value: 7 },
+        {
+          name: "query",
+          title: "关键词",
+          type: "input",
+          placeholders: [{ title: "可选，搜索标题或简介", value: "" }],
+        },
+        {
+          name: "genres",
+          title: "类型",
+          type: "input",
+          placeholders: [{ title: "可选，如 drama,action", value: "" }],
+        },
+        {
+          name: "countries",
+          title: "国家",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 us,gb", value: "" }],
+        },
+        {
+          name: "languages",
+          title: "语言",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 en,ja", value: "" }],
+        },
+        {
+          name: "networks",
+          title: "电视网",
+          type: "input",
+          placeholders: [{ title: "可选，如 HBO,Netflix", value: "" }],
+        },
+      ],
     },
     {
       id: "traktNewShows",
@@ -57,7 +95,45 @@ WidgetMetadata = {
       functionName: "loadTraktNewShows",
       cacheDuration: 1800,
       requiresWebView: false,
-      params: calendarParams("shows"),
+      params: [
+        {
+          name: "startDate",
+          title: "开始日期",
+          type: "input",
+          placeholders: [{ title: "YYYY-MM-DD，留空为今天 UTC", value: "" }],
+        },
+        { name: "days", title: "天数", type: "count", value: 7 },
+        {
+          name: "query",
+          title: "关键词",
+          type: "input",
+          placeholders: [{ title: "可选，搜索标题或简介", value: "" }],
+        },
+        {
+          name: "genres",
+          title: "类型",
+          type: "input",
+          placeholders: [{ title: "可选，如 drama,action", value: "" }],
+        },
+        {
+          name: "countries",
+          title: "国家",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 us,gb", value: "" }],
+        },
+        {
+          name: "languages",
+          title: "语言",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 en,ja", value: "" }],
+        },
+        {
+          name: "networks",
+          title: "电视网",
+          type: "input",
+          placeholders: [{ title: "可选，如 HBO,Netflix", value: "" }],
+        },
+      ],
     },
     {
       id: "traktSeasonPremieres",
@@ -65,7 +141,45 @@ WidgetMetadata = {
       functionName: "loadTraktSeasonPremieres",
       cacheDuration: 1800,
       requiresWebView: false,
-      params: calendarParams("shows"),
+      params: [
+        {
+          name: "startDate",
+          title: "开始日期",
+          type: "input",
+          placeholders: [{ title: "YYYY-MM-DD，留空为今天 UTC", value: "" }],
+        },
+        { name: "days", title: "天数", type: "count", value: 7 },
+        {
+          name: "query",
+          title: "关键词",
+          type: "input",
+          placeholders: [{ title: "可选，搜索标题或简介", value: "" }],
+        },
+        {
+          name: "genres",
+          title: "类型",
+          type: "input",
+          placeholders: [{ title: "可选，如 drama,action", value: "" }],
+        },
+        {
+          name: "countries",
+          title: "国家",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 us,gb", value: "" }],
+        },
+        {
+          name: "languages",
+          title: "语言",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 en,ja", value: "" }],
+        },
+        {
+          name: "networks",
+          title: "电视网",
+          type: "input",
+          placeholders: [{ title: "可选，如 HBO,Netflix", value: "" }],
+        },
+      ],
     },
     {
       id: "traktFinales",
@@ -73,7 +187,45 @@ WidgetMetadata = {
       functionName: "loadTraktFinales",
       cacheDuration: 1800,
       requiresWebView: false,
-      params: calendarParams("shows"),
+      params: [
+        {
+          name: "startDate",
+          title: "开始日期",
+          type: "input",
+          placeholders: [{ title: "YYYY-MM-DD，留空为今天 UTC", value: "" }],
+        },
+        { name: "days", title: "天数", type: "count", value: 7 },
+        {
+          name: "query",
+          title: "关键词",
+          type: "input",
+          placeholders: [{ title: "可选，搜索标题或简介", value: "" }],
+        },
+        {
+          name: "genres",
+          title: "类型",
+          type: "input",
+          placeholders: [{ title: "可选，如 drama,action", value: "" }],
+        },
+        {
+          name: "countries",
+          title: "国家",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 us,gb", value: "" }],
+        },
+        {
+          name: "languages",
+          title: "语言",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 en,ja", value: "" }],
+        },
+        {
+          name: "networks",
+          title: "电视网",
+          type: "input",
+          placeholders: [{ title: "可选，如 HBO,Netflix", value: "" }],
+        },
+      ],
     },
     {
       id: "traktMovies",
@@ -81,7 +233,39 @@ WidgetMetadata = {
       functionName: "loadTraktMovies",
       cacheDuration: 1800,
       requiresWebView: false,
-      params: calendarParams("movies"),
+      params: [
+        {
+          name: "startDate",
+          title: "开始日期",
+          type: "input",
+          placeholders: [{ title: "YYYY-MM-DD，留空为今天 UTC", value: "" }],
+        },
+        { name: "days", title: "天数", type: "count", value: 7 },
+        {
+          name: "query",
+          title: "关键词",
+          type: "input",
+          placeholders: [{ title: "可选，搜索标题或简介", value: "" }],
+        },
+        {
+          name: "genres",
+          title: "类型",
+          type: "input",
+          placeholders: [{ title: "可选，如 drama,action", value: "" }],
+        },
+        {
+          name: "countries",
+          title: "国家",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 us,gb", value: "" }],
+        },
+        {
+          name: "languages",
+          title: "语言",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 en,ja", value: "" }],
+        },
+      ],
     },
     {
       id: "traktDvd",
@@ -89,60 +273,45 @@ WidgetMetadata = {
       functionName: "loadTraktDvd",
       cacheDuration: 1800,
       requiresWebView: false,
-      params: calendarParams("movies"),
+      params: [
+        {
+          name: "startDate",
+          title: "开始日期",
+          type: "input",
+          placeholders: [{ title: "YYYY-MM-DD，留空为今天 UTC", value: "" }],
+        },
+        { name: "days", title: "天数", type: "count", value: 7 },
+        {
+          name: "query",
+          title: "关键词",
+          type: "input",
+          placeholders: [{ title: "可选，搜索标题或简介", value: "" }],
+        },
+        {
+          name: "genres",
+          title: "类型",
+          type: "input",
+          placeholders: [{ title: "可选，如 drama,action", value: "" }],
+        },
+        {
+          name: "countries",
+          title: "国家",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 us,gb", value: "" }],
+        },
+        {
+          name: "languages",
+          title: "语言",
+          type: "input",
+          placeholders: [{ title: "可选，2 位代码，如 en,ja", value: "" }],
+        },
+      ],
     },
   ],
 };
 
 const TRAKT_API_BASE = "https://api.trakt.tv";
 const TRAKT_MAX_DAYS = 33;
-
-function calendarParams(mediaType) {
-  const params = [
-    {
-      name: "startDate",
-      title: "开始日期",
-      type: "input",
-      placeholders: [{ title: "YYYY-MM-DD，留空为今天 UTC", value: "" }],
-    },
-    { name: "days", title: "天数", type: "count", value: 7 },
-    {
-      name: "query",
-      title: "关键词",
-      type: "input",
-      placeholders: [{ title: "可选，搜索标题或简介", value: "" }],
-    },
-    {
-      name: "genres",
-      title: "类型",
-      type: "input",
-      placeholders: [{ title: "可选，如 drama,action", value: "" }],
-    },
-    {
-      name: "countries",
-      title: "国家",
-      type: "input",
-      placeholders: [{ title: "可选，2 位代码，如 us,gb", value: "" }],
-    },
-    {
-      name: "languages",
-      title: "语言",
-      type: "input",
-      placeholders: [{ title: "可选，2 位代码，如 en,ja", value: "" }],
-    },
-  ];
-
-  if (mediaType === "shows") {
-    params.push({
-      name: "networks",
-      title: "电视网",
-      type: "input",
-      placeholders: [{ title: "可选，如 HBO,Netflix", value: "" }],
-    });
-  }
-
-  return params;
-}
 
 async function loadTraktShows(params = {}) {
   return loadShowCalendar("shows", params);
