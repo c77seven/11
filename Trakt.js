@@ -3,7 +3,7 @@ WidgetMetadata = {
     title: "Trakt 个人日历图片角标版",
     author: "Forward",
     description: "支持原生 TMDB 详情模式，也支持用 Cloudinary 自定义图片角标样式。",
-    version: "1.4.0",
+    version: "1.4.1",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
     modules: [
