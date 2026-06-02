@@ -2,8 +2,8 @@ WidgetMetadata = {
     id: "trakt_calendar_personal_cloudinary",
     title: "Trakt 个人日历图片角标版",
     author: "Forward",
-    description: "使用 Cloudinary 把更新时间直接画进图片左下角。",
-    version: "1.6.0",
+    description: "使用 Cloudinary 把 Apple 磨砂玻璃风格更新时间角标画进图片左下角。",
+    version: "1.3.3",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
     modules: [
@@ -179,14 +179,20 @@ function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle, 
     const image = tmdbImage(d.backdrop_path || d.poster_path, "w780");
     const fallbackPoster = tmdbImage(d.poster_path || d.backdrop_path, "w500");
     const poster = overlayImageUrl(image || fallbackPoster, badgeText, cloudinaryCloud);
+    const seasonNumber = ep && (ep.season_number || ep.season);
+    const episodeNumber = ep && (ep.episode_number || ep.number);
 
     return {
-        id: `trakt-cloudinary:tv:${d.id}`,
-        link: `trakt-cloudinary:tv:${d.id}`,
+        id: String(d.id),
+        link: `trakt-cloudinary:tv:${d.id}:${seasonNumber || ""}:${episodeNumber || ""}`,
         tmdbId: d.id,
         type: "url",
         mediaType: "tv",
         title: d.name || fallback.title,
+        seriesName: d.name || fallback.title,
+        season: seasonNumber,
+        episode: episodeNumber,
+        episodeName: episodeTitle,
         genreTitle: genre,
         subTitle: "",
         releaseDate: episodeText,
@@ -214,7 +220,7 @@ function buildMovieVideoItem(d, fallback, releaseDate, sourceTitle, cloudinaryCl
     const poster = overlayImageUrl(image || fallbackPoster, badgeText, cloudinaryCloud);
 
     return {
-        id: `trakt-cloudinary:movie:${d.id}`,
+        id: String(d.id),
         link: `trakt-cloudinary:movie:${d.id}`,
         tmdbId: d.id,
         type: "url",
@@ -242,14 +248,37 @@ async function loadDetail(link) {
 
     const mediaType = parts[1] === "movie" ? "movie" : "tv";
     const tmdbId = parts[2];
+    const season = parts[3] ? Number(parts[3]) : undefined;
+    const episode = parts[4] ? Number(parts[4]) : undefined;
 
     try {
         const d = await Widget.tmdb.get(`/${mediaType}/${tmdbId}`, { params: { language: "zh-CN" } });
-        if (mediaType === "movie") return buildMovieVideoItem(d, { title: d.title }, d.release_date || "", "TMDB 详情", "");
-        return buildShowVideoItem(d, { title: d.name }, d.next_episode_to_air || d.last_episode_to_air || null, "", "", "TMDB 详情", "");
+        return buildTmdbDetailItem(d, mediaType, season, episode);
     } catch (e) {
         return null;
     }
+}
+
+function buildTmdbDetailItem(d, mediaType, season, episode) {
+    const isMovie = mediaType === "movie";
+    const title = isMovie ? d.title : d.name;
+    const releaseDate = isMovie ? d.release_date : d.first_air_date;
+
+    return {
+        id: Number(d.id),
+        tmdbId: Number(d.id),
+        type: "tmdb",
+        mediaType: mediaType,
+        title: title,
+        seriesName: isMovie ? "" : title,
+        season: season,
+        episode: episode,
+        posterPath: tmdbImage(d.poster_path, "w500"),
+        backdropPath: tmdbImage(d.backdrop_path || d.poster_path, "w780"),
+        releaseDate: releaseDate || "",
+        genreTitle: firstGenre(d),
+        description: d.overview || ""
+    };
 }
 
 function overlayImageUrl(imageUrl, badgeText, cloudinaryCloud) {
@@ -263,7 +292,7 @@ function overlayImageUrl(imageUrl, badgeText, cloudinaryCloud) {
     const safeImage = encodeURIComponent(image);
     const transform = [
         "c_fill,w_780,h_438,g_auto,q_auto,f_auto",
-        `l_text:Arial_52_bold:${safeText},co_rgb:FFFFFF`,
+        `l_text:Arial_52_bold:${safeText},co_rgb:FFFFFF,b_rgb:4B5563,o_90,bo_18px_solid_rgb:D1D5DB,r_28,e_shadow:50`,
         "fl_layer_apply,g_south_west,x_28,y_28"
     ].join("/");
 
