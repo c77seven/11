@@ -3,7 +3,7 @@ WidgetMetadata = {
     title: "Trakt 个人日历最小版",
     author: "Forward",
     description: "最小兼容版：内置 Client ID，支持个人追剧日历和公开日历，并在卡片日期位置显示更新时间。",
-    version: "1.1.0",
+    version: "1.2.0",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
     modules: [
