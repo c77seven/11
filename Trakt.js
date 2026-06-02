@@ -3,7 +3,7 @@ WidgetMetadata = {
     title: "Trakt 个人日历图片角标版",
     author: "Forward",
     description: "使用 Cloudinary 把更新时间直接画进图片左下角。",
-    version: "1.5.0",
+    version: "1.6.0",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
     modules: [
