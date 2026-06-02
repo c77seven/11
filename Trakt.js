@@ -3,7 +3,7 @@ WidgetMetadata = {
     title: "Trakt 个人日历图片角标版",
     author: "Forward",
     description: "使用 Cloudinary 把更新时间直接画进图片左下角。",
-    version: "1.4.0",
+    version: "1.5.0",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
     modules: [
@@ -181,9 +181,10 @@ function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle, 
     const poster = overlayImageUrl(image || fallbackPoster, badgeText, cloudinaryCloud);
 
     return {
-        id: String(d.id),
+        id: `trakt-cloudinary:tv:${d.id}`,
+        link: `trakt-cloudinary:tv:${d.id}`,
         tmdbId: d.id,
-        type: "tmdb",
+        type: "url",
         mediaType: "tv",
         title: d.name || fallback.title,
         genreTitle: genre,
@@ -213,9 +214,10 @@ function buildMovieVideoItem(d, fallback, releaseDate, sourceTitle, cloudinaryCl
     const poster = overlayImageUrl(image || fallbackPoster, badgeText, cloudinaryCloud);
 
     return {
-        id: String(d.id),
+        id: `trakt-cloudinary:movie:${d.id}`,
+        link: `trakt-cloudinary:movie:${d.id}`,
         tmdbId: d.id,
-        type: "tmdb",
+        type: "url",
         mediaType: "movie",
         title: d.title || fallback.title,
         genreTitle: genre,
@@ -234,6 +236,22 @@ function buildMovieVideoItem(d, fallback, releaseDate, sourceTitle, cloudinaryCl
     };
 }
 
+async function loadDetail(link) {
+    const parts = String(link || "").split(":");
+    if (parts[0] !== "trakt-cloudinary" || parts.length < 3) return null;
+
+    const mediaType = parts[1] === "movie" ? "movie" : "tv";
+    const tmdbId = parts[2];
+
+    try {
+        const d = await Widget.tmdb.get(`/${mediaType}/${tmdbId}`, { params: { language: "zh-CN" } });
+        if (mediaType === "movie") return buildMovieVideoItem(d, { title: d.title }, d.release_date || "", "TMDB 详情", "");
+        return buildShowVideoItem(d, { title: d.name }, d.next_episode_to_air || d.last_episode_to_air || null, "", "", "TMDB 详情", "");
+    } catch (e) {
+        return null;
+    }
+}
+
 function overlayImageUrl(imageUrl, badgeText, cloudinaryCloud) {
     const cloud = clean(cloudinaryCloud);
     const image = clean(imageUrl);
@@ -245,7 +263,7 @@ function overlayImageUrl(imageUrl, badgeText, cloudinaryCloud) {
     const safeImage = encodeURIComponent(image);
     const transform = [
         "c_fill,w_780,h_438,g_auto,q_auto,f_auto",
-        `l_text:Arial_44_bold:${safeText},co_rgb:FFFFFF,b_rgb:4B5563,o_92,r_24,bo_14px_solid_rgb:4B5563`,
+        `l_text:Arial_52_bold:${safeText},co_rgb:FFFFFF`,
         "fl_layer_apply,g_south_west,x_28,y_28"
     ].join("/");
 
