@@ -1,9 +1,9 @@
 WidgetMetadata = {
-    id: "trakt_calendar_personal_cloudinary",
-    title: "Trakt 个人日历图片角标版",
+    id: "trakt_calendar_badge",
+    title: "Trakt 日历角标版",
     author: "Forward",
-    description: "支持原生 TMDB 详情模式，也支持用 Cloudinary 自定义图片角标样式。",
-    version: "1.4.1",
+    description: "固定灰色圆角图片角标版，参数保持最少。",
+    version: "1.0.0",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
     modules: [
@@ -38,69 +38,7 @@ WidgetMetadata = {
                     title: "Cloudinary Cloud",
                     type: "input",
                     value: "",
-                    placeholders: [{ title: "填 Cloudinary cloud name 才会把角标画进图片", value: "" }]
-                },
-                {
-                    name: "displayMode",
-                    title: "显示模式",
-                    type: "enumeration",
-                    value: "native",
-                    enumOptions: [
-                        { title: "原生详情", value: "native" },
-                        { title: "自定义图片", value: "cloudinary" }
-                    ]
-                },
-                {
-                    name: "badgeTextColor",
-                    title: "文字颜色",
-                    type: "input",
-                    value: "FFFFFF",
-                    belongTo: { paramName: "displayMode", value: ["cloudinary"] },
-                    placeholders: [{ title: "十六进制，如 FFFFFF", value: "FFFFFF" }]
-                },
-                {
-                    name: "badgeBgColor",
-                    title: "底色",
-                    type: "input",
-                    value: "4B5563",
-                    belongTo: { paramName: "displayMode", value: ["cloudinary"] },
-                    placeholders: [{ title: "十六进制，如 4B5563", value: "4B5563" }]
-                },
-                {
-                    name: "badgeBorderColor",
-                    title: "描边",
-                    type: "input",
-                    value: "D1D5DB",
-                    belongTo: { paramName: "displayMode", value: ["cloudinary"] },
-                    placeholders: [{ title: "十六进制，如 D1D5DB", value: "D1D5DB" }]
-                },
-                {
-                    name: "badgeOpacity",
-                    title: "透明度",
-                    type: "count",
-                    value: 90,
-                    belongTo: { paramName: "displayMode", value: ["cloudinary"] }
-                },
-                {
-                    name: "badgeRadius",
-                    title: "圆角",
-                    type: "count",
-                    value: 28,
-                    belongTo: { paramName: "displayMode", value: ["cloudinary"] }
-                },
-                {
-                    name: "badgePadding",
-                    title: "内边距",
-                    type: "count",
-                    value: 18,
-                    belongTo: { paramName: "displayMode", value: ["cloudinary"] }
-                },
-                {
-                    name: "badgeFontSize",
-                    title: "字号",
-                    type: "count",
-                    value: 52,
-                    belongTo: { paramName: "displayMode", value: ["cloudinary"] }
+                    placeholders: [{ title: "必填：Cloudinary cloud name", value: "" }]
                 },
                 { name: "page", title: "页码", type: "page" }
             ]
@@ -113,71 +51,50 @@ const INTERNAL_CLIENT_ID = "95b59922670c84040db3632c7aac6f33704f6ffe5cbf3113a056
 async function loadTraktCalendar(params = {}) {
     const section = params.section || "personal";
     const page = Number(params.page || 1);
-    const options = buildOptions(params);
+    const cloud = clean(params.cloudinaryCloud);
 
     if (section === "personal") {
-        return await loadPersonalCalendar(params.traktUser, page, options);
+        return await loadPersonalCalendar(params.traktUser, page, cloud);
     }
 
-    return await loadPublicCalendar(section, page, options);
+    return await loadPublicCalendar(section, page, cloud);
 }
 
-function buildOptions(params) {
-    return {
-        mode: params.displayMode === "cloudinary" ? "cloudinary" : "native",
-        cloudinaryCloud: clean(params.cloudinaryCloud),
-        badgeTextColor: normalizeHex(params.badgeTextColor, "FFFFFF"),
-        badgeBgColor: normalizeHex(params.badgeBgColor, "4B5563"),
-        badgeBorderColor: normalizeHex(params.badgeBorderColor, "D1D5DB"),
-        badgeOpacity: clamp(Number(params.badgeOpacity || 90), 1, 100),
-        badgeRadius: clamp(Number(params.badgeRadius || 28), 0, 80),
-        badgePadding: clamp(Number(params.badgePadding || 18), 0, 60),
-        badgeFontSize: clamp(Number(params.badgeFontSize || 52), 12, 96)
-    };
-}
-
-async function loadPersonalCalendar(user, page, options) {
+async function loadPersonalCalendar(user, page, cloud) {
     const traktUser = clean(user);
-    if (!traktUser) {
-        return [{ id: "need_user", type: "text", title: "请填写 Trakt 用户名" }];
-    }
+    if (!traktUser) return [{ id: "need_user", type: "text", title: "请填写 Trakt 用户名" }];
+    if (!cloud) return [{ id: "need_cloud", type: "text", title: "请填写 Cloudinary Cloud" }];
 
     const url = `https://api.trakt.tv/users/${encodeURIComponent(traktUser)}/watched/shows?extended=noseasons&limit=100`;
 
     try {
-        const res = await Widget.http.get(url, {
-            headers: traktHeaders()
-        });
-
+        const res = await Widget.http.get(url, { headers: traktHeaders() });
         const rows = Array.isArray(res.data) ? res.data : [];
         if (rows.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "暂无观看记录" }] : [];
 
-        const enriched = await Promise.all(rows.slice(0, 80).map(row => buildPersonalItem(row, options)));
+        const enriched = await Promise.all(rows.slice(0, 80).map(row => buildPersonalItem(row, cloud)));
         const valid = enriched.filter(Boolean);
         sortPersonalItems(valid);
 
         const pageItems = valid.slice((page - 1) * 15, page * 15);
-        if (pageItems.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "暂无可显示剧集" }] : [];
-        return pageItems;
+        return pageItems.length > 0 ? pageItems : (page === 1 ? [{ id: "empty", type: "text", title: "暂无可显示剧集" }] : []);
     } catch (e) {
         return [{ id: "err", type: "text", title: `读取个人日历失败: ${e.message || e}` }];
     }
 }
 
-async function loadPublicCalendar(section, page, options) {
-    const startDate = todayDate();
-    const url = `https://api.trakt.tv/calendars/all/${section}/${startDate}/7?extended=full`;
+async function loadPublicCalendar(section, page, cloud) {
+    if (!cloud) return [{ id: "need_cloud", type: "text", title: "请填写 Cloudinary Cloud" }];
+
+    const url = `https://api.trakt.tv/calendars/all/${section}/${todayDate()}/7?extended=full`;
 
     try {
-        const res = await Widget.http.get(url, {
-            headers: traktHeaders()
-        });
-
+        const res = await Widget.http.get(url, { headers: traktHeaders() });
         const rows = Array.isArray(res.data) ? res.data : [];
         if (rows.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "暂无日历数据" }] : [];
 
         const pageRows = rows.slice((page - 1) * 15, page * 15);
-        const items = await Promise.all(pageRows.map(row => buildPublicItem(row, section, options)));
+        const items = await Promise.all(pageRows.map(row => buildPublicItem(row, section, cloud)));
         const valid = items.filter(Boolean);
         return valid.length > 0 ? valid : (page === 1 ? [{ id: "empty", type: "text", title: "暂无可显示条目" }] : []);
     } catch (e) {
@@ -193,7 +110,7 @@ function traktHeaders() {
     };
 }
 
-async function buildPersonalItem(row, options) {
+async function buildPersonalItem(row, cloud) {
     const subject = row && row.show;
     if (!subject || !subject.ids || !subject.ids.tmdb) return null;
 
@@ -201,13 +118,10 @@ async function buildPersonalItem(row, options) {
         const d = await Widget.tmdb.get(`/tv/${subject.ids.tmdb}`, { params: { language: "zh-CN" } });
         const ep = d.next_episode_to_air || d.last_episode_to_air || null;
         const airDate = ep && ep.air_date ? ep.air_date : (d.first_air_date || "");
-        const isFuture = isTodayOrFuture(airDate);
-
         return {
             sortDate: airDate || "1970-01-01",
-            isFuture: isFuture,
-            watchedDate: row.last_watched_at || "",
-            item: buildShowVideoItem(d, subject, ep, airDate, row.last_watched_at, "我的追剧日历", options)
+            isFuture: isTodayOrFuture(airDate),
+            item: buildShowItem(d, subject, ep, airDate, row.last_watched_at || "", "我的追剧日历", cloud)
         };
     } catch (e) {
         return null;
@@ -226,7 +140,7 @@ function sortPersonalItems(items) {
     }
 }
 
-async function buildPublicItem(row, section, options) {
+async function buildPublicItem(row, section, cloud) {
     const isMovie = section === "movies";
     const subject = isMovie ? row.movie : row.show;
     if (!subject || !subject.ids || !subject.ids.tmdb) return null;
@@ -235,52 +149,45 @@ async function buildPublicItem(row, section, options) {
 
     try {
         const d = await Widget.tmdb.get(`/${mediaType}/${subject.ids.tmdb}`, { params: { language: "zh-CN" } });
-        if (isMovie) {
-            return buildMovieVideoItem(d, subject, row.released || d.release_date, calendarTitle(section), options);
-        }
-
-        const ep = row.episode || null;
-        return buildShowVideoItem(d, subject, ep, row.first_aired || "", "", calendarTitle(section), options);
+        if (isMovie) return buildMovieItem(d, subject, row.released || d.release_date, calendarTitle(section), cloud);
+        return buildShowItem(d, subject, row.episode || null, row.first_aired || "", "", calendarTitle(section), cloud);
     } catch (e) {
         return null;
     }
 }
 
-function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle, options) {
-    const dateText = formatPosterUpdateDate(airDate, ep);
+function buildShowItem(d, fallback, ep, airDate, watchedDate, sourceTitle, cloud) {
     const badgeText = formatOverlayTime(airDate);
+    const dateText = formatPosterUpdateDate(airDate, ep);
     const episodeText = formatEpisodeText(ep);
-    const genre = firstGenre(d);
     const episodeTitle = ep && ep.name ? ep.name : (ep && ep.title ? ep.title : "");
     const image = tmdbImage(d.backdrop_path || d.poster_path, "w780");
     const fallbackPoster = tmdbImage(d.poster_path || d.backdrop_path, "w500");
-    const poster = overlayImageUrl(image || fallbackPoster, badgeText, options);
+    const poster = overlayImageUrl(image || fallbackPoster, badgeText, cloud);
     const seasonNumber = ep && (ep.season_number || ep.season);
     const episodeNumber = ep && (ep.episode_number || ep.number);
-    const useCloudinary = options.mode === "cloudinary" && clean(options.cloudinaryCloud);
 
     return {
-        id: useCloudinary ? String(d.id) : Number(d.id),
-        link: useCloudinary ? `trakt-cloudinary:tv:${d.id}:${seasonNumber || ""}:${episodeNumber || ""}` : undefined,
+        id: String(d.id),
+        link: `trakt-badge:tv:${d.id}:${seasonNumber || ""}:${episodeNumber || ""}`,
         tmdbId: d.id,
-        type: useCloudinary ? "url" : "tmdb",
+        type: "url",
         mediaType: "tv",
         title: d.name || fallback.title,
         seriesName: d.name || fallback.title,
         season: seasonNumber,
         episode: episodeNumber,
         episodeName: episodeTitle,
-        genreTitle: genre,
+        genreTitle: firstGenre(d),
         subTitle: "",
         releaseDate: episodeText,
         year: airDate ? airDate.substring(0, 4) : "",
         durationText: badgeText,
-        posterPath: useCloudinary ? (poster || fallbackPoster) : fallbackPoster,
-        backdropPath: useCloudinary ? (poster || image || fallbackPoster) : (image || fallbackPoster),
+        posterPath: poster || fallbackPoster,
+        backdropPath: poster || image || fallbackPoster,
         description: compact([
             sourceTitle,
             dateText ? `更新时间: ${dateText}` : "",
-            badgeText ? `图片角标: ${badgeText}` : "",
             episodeTitle ? `本集标题: ${episodeTitle}` : "",
             watchedDate ? `上次观看: ${watchedDate.split("T")[0]}` : "",
             d.overview || fallback.overview || ""
@@ -288,33 +195,30 @@ function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle, 
     };
 }
 
-function buildMovieVideoItem(d, fallback, releaseDate, sourceTitle, options) {
+function buildMovieItem(d, fallback, releaseDate, sourceTitle, cloud) {
     const date = clean(releaseDate).slice(0, 10);
     const badgeText = formatOverlayTime(date);
-    const genre = firstGenre(d);
     const image = tmdbImage(d.backdrop_path || d.poster_path, "w780");
     const fallbackPoster = tmdbImage(d.poster_path || d.backdrop_path, "w500");
-    const poster = overlayImageUrl(image || fallbackPoster, badgeText, options);
-    const useCloudinary = options.mode === "cloudinary" && clean(options.cloudinaryCloud);
+    const poster = overlayImageUrl(image || fallbackPoster, badgeText, cloud);
 
     return {
-        id: useCloudinary ? String(d.id) : Number(d.id),
-        link: useCloudinary ? `trakt-cloudinary:movie:${d.id}` : undefined,
+        id: String(d.id),
+        link: `trakt-badge:movie:${d.id}`,
         tmdbId: d.id,
-        type: useCloudinary ? "url" : "tmdb",
+        type: "url",
         mediaType: "movie",
         title: d.title || fallback.title,
-        genreTitle: genre,
+        genreTitle: firstGenre(d),
         subTitle: "",
         releaseDate: "",
         year: date ? date.substring(0, 4) : "",
         durationText: badgeText,
-        posterPath: useCloudinary ? (poster || fallbackPoster) : fallbackPoster,
-        backdropPath: useCloudinary ? (poster || image || fallbackPoster) : (image || fallbackPoster),
+        posterPath: poster || fallbackPoster,
+        backdropPath: poster || image || fallbackPoster,
         description: compact([
             sourceTitle,
             date ? `上映日期: ${date}` : "",
-            badgeText ? `图片角标: ${badgeText}` : "",
             d.overview || fallback.overview || ""
         ]).join("\n")
     };
@@ -322,7 +226,7 @@ function buildMovieVideoItem(d, fallback, releaseDate, sourceTitle, options) {
 
 async function loadDetail(link) {
     const parts = String(link || "").split(":");
-    if (parts[0] !== "trakt-cloudinary" || parts.length < 3) return null;
+    if (parts[0] !== "trakt-badge" || parts.length < 3) return null;
 
     const mediaType = parts[1] === "movie" ? "movie" : "tv";
     const tmdbId = parts[2];
@@ -331,64 +235,42 @@ async function loadDetail(link) {
 
     try {
         const d = await Widget.tmdb.get(`/${mediaType}/${tmdbId}`, { params: { language: "zh-CN" } });
-        return buildTmdbDetailItem(d, mediaType, season, episode);
+        return {
+            id: Number(d.id),
+            tmdbId: Number(d.id),
+            type: "tmdb",
+            mediaType: mediaType,
+            title: mediaType === "movie" ? d.title : d.name,
+            seriesName: mediaType === "movie" ? "" : d.name,
+            season: season,
+            episode: episode,
+            posterPath: tmdbImage(d.poster_path, "w500"),
+            backdropPath: tmdbImage(d.backdrop_path || d.poster_path, "w780"),
+            releaseDate: mediaType === "movie" ? (d.release_date || "") : (d.first_air_date || ""),
+            genreTitle: firstGenre(d),
+            description: d.overview || ""
+        };
     } catch (e) {
         return null;
     }
 }
 
-function buildTmdbDetailItem(d, mediaType, season, episode) {
-    const isMovie = mediaType === "movie";
-    const title = isMovie ? d.title : d.name;
-    const releaseDate = isMovie ? d.release_date : d.first_air_date;
-
-    return {
-        id: Number(d.id),
-        tmdbId: Number(d.id),
-        type: "tmdb",
-        mediaType: mediaType,
-        title: title,
-        seriesName: isMovie ? "" : title,
-        season: season,
-        episode: episode,
-        posterPath: tmdbImage(d.poster_path, "w500"),
-        backdropPath: tmdbImage(d.backdrop_path || d.poster_path, "w780"),
-        releaseDate: releaseDate || "",
-        genreTitle: firstGenre(d),
-        description: d.overview || ""
-    };
-}
-
-function overlayImageUrl(imageUrl, badgeText, options) {
-    const cloud = clean(options.cloudinaryCloud);
+function overlayImageUrl(imageUrl, badgeText, cloud) {
     const image = clean(imageUrl);
     const text = clean(badgeText);
-    if (!cloud || !image || !text) return image;
+    const cloudName = clean(cloud);
+    if (!cloudName || !image || !text) return image;
 
-    const safeCloud = encodeURIComponent(cloud);
+    const safeCloud = encodeURIComponent(cloudName);
     const safeText = encodeURIComponent(text);
     const safeImage = encodeURIComponent(image);
-    const fontSize = Math.round(options.badgeFontSize);
-    const padding = Math.round(options.badgePadding);
-    const radius = Math.round(options.badgeRadius);
-    const opacity = Math.round(options.badgeOpacity);
     const transform = [
         "c_fill,w_780,h_438,g_auto,q_auto,f_auto",
-        `l_text:Arial_${fontSize}_bold:${safeText},co_rgb:${options.badgeTextColor},b_rgb:${options.badgeBgColor},o_${opacity},bo_${padding}px_solid_rgb:${options.badgeBorderColor},r_${radius},e_shadow:50`,
+        `l_text:Arial_52_bold:${safeText},co_rgb:FFFFFF,b_rgb:6B7280,bo_18px_solid_rgb:6B7280,r_24`,
         "fl_layer_apply,g_south_west,x_28,y_28"
     ].join("/");
 
     return `https://res.cloudinary.com/${safeCloud}/image/fetch/${transform}/${safeImage}`;
-}
-
-function normalizeHex(value, fallback) {
-    const text = clean(value || fallback).replace("#", "").toUpperCase();
-    return /^[0-9A-F]{6}$/.test(text) ? text : fallback;
-}
-
-function clamp(value, min, max) {
-    if (!Number.isFinite(value)) return min;
-    return Math.max(min, Math.min(max, value));
 }
 
 function tmdbImage(path, size) {
@@ -415,13 +297,11 @@ function formatPosterUpdateDate(date, ep) {
     const season = ep && (ep.season_number || ep.season);
     const episode = ep && (ep.episode_number || ep.number);
     const episodeText = season || episode ? `S${season || "?"}•E${episode || "?"}` : "";
-
     return compact([year, episodeText, `${month}.${day}`]).join("/");
 }
 
 function formatEpisodeText(ep) {
     if (!ep) return "";
-
     const season = ep.season_number || ep.season;
     const episode = ep.episode_number || ep.number;
     const title = ep.name || ep.title || "";
@@ -432,7 +312,6 @@ function formatEpisodeText(ep) {
 function formatOverlayTime(value) {
     const text = clean(value);
     if (!text) return "";
-
     const hasTime = text.indexOf("T") > -1;
     const dateText = text.slice(0, 10);
 
@@ -441,12 +320,8 @@ function formatOverlayTime(value) {
         if (!isNaN(target.getTime())) {
             const diffMs = target.getTime() - new Date().getTime();
             const diffHours = Math.round(diffMs / 3600000);
-            if (diffMs >= 0 && diffHours < 24) {
-                return diffHours <= 0 ? "即将播出" : `${diffHours}小时后`;
-            }
-            if (diffMs < 0 && Math.abs(diffHours) < 24) {
-                return `${Math.abs(diffHours)}小时前`;
-            }
+            if (diffMs >= 0 && diffHours < 24) return diffHours <= 0 ? "即将播出" : `${diffHours}小时后`;
+            if (diffMs < 0 && Math.abs(diffHours) < 24) return `${Math.abs(diffHours)}小时前`;
         }
     }
 
@@ -477,8 +352,7 @@ function parseLocalDate(dateText) {
 function isTodayOrFuture(date) {
     const cleanDate = clean(date).slice(0, 10);
     if (!cleanDate) return false;
-    const today = todayDate();
-    return cleanDate >= today;
+    return cleanDate >= todayDate();
 }
 
 function todayDate() {
@@ -498,5 +372,5 @@ function clean(value) {
 }
 
 function compact(values) {
-    return values.filter((value) => value !== undefined && value !== null && String(value).trim() !== "");
+    return values.filter(value => value !== undefined && value !== null && String(value).trim() !== "");
 }
