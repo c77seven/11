@@ -1,11 +1,12 @@
 WidgetMetadata = {
-    id: "trakt_calendar_personal_min",
-    title: "Trakt 个人日历最小版",
+    id: "trakt_calendar_personal_overlay",
+    title: "Trakt 个人日历角标版",
     author: "Forward",
-    description: "最小兼容版：内置 Client ID，支持个人追剧日历和公开日历，并在卡片日期位置显示更新时间。",
-    version: "1.2.0",
+    description: "使用 url 条目输出，尝试让 durationText 显示为封面角标。",
+    version: "1.3.0",
     requiredVersion: "0.0.1",
     site: "https://trakt.tv",
+    detailCacheDuration: 3600,
     modules: [
         {
             title: "Trakt 日历",
@@ -54,41 +55,29 @@ async function loadTraktCalendar(params = {}) {
 
 async function loadPersonalCalendar(user, page) {
     const traktUser = clean(user);
-    if (!traktUser) {
-        return [{ id: "need_user", type: "text", title: "请填写 Trakt 用户名" }];
-    }
+    if (!traktUser) return [{ id: "need_user", type: "text", title: "请填写 Trakt 用户名" }];
 
     const url = `https://api.trakt.tv/users/${encodeURIComponent(traktUser)}/watched/shows?extended=noseasons&limit=100`;
 
     try {
-        const res = await Widget.http.get(url, {
-            headers: traktHeaders()
-        });
-
+        const res = await Widget.http.get(url, { headers: traktHeaders() });
         const rows = Array.isArray(res.data) ? res.data : [];
         if (rows.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "暂无观看记录" }] : [];
 
-        const enriched = await Promise.all(rows.slice(0, 80).map(buildPersonalItem));
+        const enriched = await Promise.all(rows.slice(0, 80).map(buildPersonalEntry));
         const valid = enriched.filter(Boolean);
-        sortPersonalItems(valid);
-
-        const pageItems = valid.slice((page - 1) * 15, page * 15);
-        if (pageItems.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "暂无可显示剧集" }] : [];
-        return pageItems;
+        sortEntries(valid);
+        return valid.slice((page - 1) * 15, page * 15).map(entry => entry.item);
     } catch (e) {
         return [{ id: "err", type: "text", title: `读取个人日历失败: ${e.message || e}` }];
     }
 }
 
 async function loadPublicCalendar(section, page) {
-    const startDate = todayDate();
-    const url = `https://api.trakt.tv/calendars/all/${section}/${startDate}/7?extended=full`;
+    const url = `https://api.trakt.tv/calendars/all/${section}/${todayDate()}/7?extended=full`;
 
     try {
-        const res = await Widget.http.get(url, {
-            headers: traktHeaders()
-        });
-
+        const res = await Widget.http.get(url, { headers: traktHeaders() });
         const rows = Array.isArray(res.data) ? res.data : [];
         if (rows.length === 0) return page === 1 ? [{ id: "empty", type: "text", title: "暂无日历数据" }] : [];
 
@@ -109,7 +98,7 @@ function traktHeaders() {
     };
 }
 
-async function buildPersonalItem(row) {
+async function buildPersonalEntry(row) {
     const subject = row && row.show;
     if (!subject || !subject.ids || !subject.ids.tmdb) return null;
 
@@ -117,28 +106,14 @@ async function buildPersonalItem(row) {
         const d = await Widget.tmdb.get(`/tv/${subject.ids.tmdb}`, { params: { language: "zh-CN" } });
         const ep = d.next_episode_to_air || d.last_episode_to_air || null;
         const airDate = ep && ep.air_date ? ep.air_date : (d.first_air_date || "");
-        const isFuture = isTodayOrFuture(airDate);
 
         return {
             sortDate: airDate || "1970-01-01",
-            isFuture: isFuture,
-            watchedDate: row.last_watched_at || "",
-            item: buildShowVideoItem(d, subject, ep, airDate, row.last_watched_at, "我的追剧日历")
+            isFuture: isTodayOrFuture(airDate),
+            item: showUrlItem(d, subject, ep, airDate, row.last_watched_at || "", "我的追剧日历")
         };
     } catch (e) {
         return null;
-    }
-}
-
-function sortPersonalItems(items) {
-    items.sort((a, b) => {
-        if (a.isFuture !== b.isFuture) return a.isFuture ? -1 : 1;
-        if (a.isFuture) return new Date(a.sortDate) - new Date(b.sortDate);
-        return new Date(b.sortDate) - new Date(a.sortDate);
-    });
-
-    for (let i = 0; i < items.length; i++) {
-        items[i] = items[i].item;
     }
 }
 
@@ -151,36 +126,44 @@ async function buildPublicItem(row, section) {
 
     try {
         const d = await Widget.tmdb.get(`/${mediaType}/${subject.ids.tmdb}`, { params: { language: "zh-CN" } });
-        if (isMovie) {
-            return buildMovieVideoItem(d, subject, row.released || d.release_date, calendarTitle(section));
-        }
-
-        const ep = row.episode || null;
-        return buildShowVideoItem(d, subject, ep, row.first_aired || "", "", calendarTitle(section));
+        if (isMovie) return movieUrlItem(d, subject, row.released || d.release_date, calendarTitle(section));
+        return showUrlItem(d, subject, row.episode || null, row.first_aired || "", "", calendarTitle(section));
     } catch (e) {
         return null;
     }
 }
 
-function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle) {
-    const dateText = formatPosterUpdateDate(airDate, ep);
+function sortEntries(items) {
+    items.sort((a, b) => {
+        if (a.isFuture !== b.isFuture) return a.isFuture ? -1 : 1;
+        if (a.isFuture) return new Date(a.sortDate) - new Date(b.sortDate);
+        return new Date(b.sortDate) - new Date(a.sortDate);
+    });
+}
+
+function showUrlItem(d, fallback, ep, airDate, watchedDate, sourceTitle) {
+    const mediaUrl = tmdbImage(d.backdrop_path || d.poster_path, "w780");
+    const posterUrl = tmdbImage(d.poster_path || d.backdrop_path, "w500");
     const badgeText = formatOverlayTime(airDate);
     const episodeText = formatEpisodeText(ep);
-    const genre = firstGenre(d);
+    const dateText = formatPosterUpdateDate(airDate, ep);
+    const link = `trakt-overlay:tv:${d.id}`;
     const episodeTitle = ep && ep.name ? ep.name : (ep && ep.title ? ep.title : "");
 
     return {
-        id: String(d.id),
+        id: link,
+        link: link,
         tmdbId: d.id,
-        type: "tmdb",
+        type: "url",
         mediaType: "tv",
         title: d.name || fallback.title,
-        genreTitle: genre,
+        genreTitle: firstGenre(d),
         subTitle: "",
         releaseDate: episodeText,
         year: airDate ? airDate.substring(0, 4) : "",
         durationText: badgeText,
-        posterPath: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : "",
+        posterPath: mediaUrl || posterUrl,
+        backdropPath: mediaUrl || posterUrl,
         description: compact([
             sourceTitle,
             dateText ? `更新时间: ${dateText}` : "",
@@ -191,29 +174,55 @@ function buildShowVideoItem(d, fallback, ep, airDate, watchedDate, sourceTitle) 
     };
 }
 
-function buildMovieVideoItem(d, fallback, releaseDate, sourceTitle) {
+function movieUrlItem(d, fallback, releaseDate, sourceTitle) {
     const date = clean(releaseDate).slice(0, 10);
-    const badgeText = formatOverlayTime(date);
-    const genre = firstGenre(d);
+    const mediaUrl = tmdbImage(d.backdrop_path || d.poster_path, "w780");
+    const posterUrl = tmdbImage(d.poster_path || d.backdrop_path, "w500");
+    const link = `trakt-overlay:movie:${d.id}`;
 
     return {
-        id: String(d.id),
+        id: link,
+        link: link,
         tmdbId: d.id,
-        type: "tmdb",
+        type: "url",
         mediaType: "movie",
         title: d.title || fallback.title,
-        genreTitle: genre,
+        genreTitle: firstGenre(d),
         subTitle: "",
         releaseDate: "",
         year: date ? date.substring(0, 4) : "",
-        durationText: badgeText,
-        posterPath: d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : "",
+        durationText: formatOverlayTime(date),
+        posterPath: mediaUrl || posterUrl,
+        backdropPath: mediaUrl || posterUrl,
         description: compact([
             sourceTitle,
             date ? `上映日期: ${date}` : "",
             d.overview || fallback.overview || ""
         ]).join("\n")
     };
+}
+
+async function loadDetail(link) {
+    const parts = String(link || "").split(":");
+    if (parts[0] !== "trakt-overlay" || parts.length < 3) return null;
+
+    const mediaType = parts[1] === "movie" ? "movie" : "tv";
+    const tmdbId = parts[2];
+
+    try {
+        const d = await Widget.tmdb.get(`/${mediaType}/${tmdbId}`, { params: { language: "zh-CN" } });
+        if (mediaType === "movie") return movieUrlItem(d, { title: d.title }, d.release_date || "", "TMDB 详情");
+        return showUrlItem(d, { title: d.name }, d.next_episode_to_air || d.last_episode_to_air || null, "", "", "TMDB 详情");
+    } catch (e) {
+        return null;
+    }
+}
+
+function tmdbImage(path, size) {
+    const text = clean(path);
+    if (!text) return "";
+    if (text.indexOf("http") === 0) return text;
+    return `https://image.tmdb.org/t/p/${size}${text}`;
 }
 
 function calendarTitle(section) {
@@ -235,16 +244,6 @@ function formatPosterUpdateDate(date, ep) {
     const episodeText = season || episode ? `S${season || "?"}•E${episode || "?"}` : "";
 
     return compact([year, episodeText, `${month}.${day}`]).join("/");
-}
-
-function formatMovieDate(date) {
-    const cleanDate = clean(date).slice(0, 10);
-    if (!cleanDate) return "";
-
-    const year = cleanDate.substring(0, 4);
-    const month = Number(cleanDate.substring(5, 7));
-    const day = Number(cleanDate.substring(8, 10));
-    return `${year}/${month}.${day}`;
 }
 
 function formatEpisodeText(ep) {
@@ -269,12 +268,8 @@ function formatOverlayTime(value) {
         if (!isNaN(target.getTime())) {
             const diffMs = target.getTime() - new Date().getTime();
             const diffHours = Math.round(diffMs / 3600000);
-            if (diffMs >= 0 && diffHours < 24) {
-                return diffHours <= 0 ? "即将播出" : `${diffHours}小时后`;
-            }
-            if (diffMs < 0 && Math.abs(diffHours) < 24) {
-                return `${Math.abs(diffHours)}小时前`;
-            }
+            if (diffMs >= 0 && diffHours < 24) return diffHours <= 0 ? "即将播出" : `${diffHours}小时后`;
+            if (diffMs < 0 && Math.abs(diffHours) < 24) return `${Math.abs(diffHours)}小时前`;
         }
     }
 
@@ -305,8 +300,7 @@ function parseLocalDate(dateText) {
 function isTodayOrFuture(date) {
     const cleanDate = clean(date).slice(0, 10);
     if (!cleanDate) return false;
-    const today = todayDate();
-    return cleanDate >= today;
+    return cleanDate >= todayDate();
 }
 
 function todayDate() {
@@ -326,5 +320,5 @@ function clean(value) {
 }
 
 function compact(values) {
-    return values.filter((value) => value !== undefined && value !== null && String(value).trim() !== "");
+    return values.filter(value => value !== undefined && value !== null && String(value).trim() !== "");
 }
